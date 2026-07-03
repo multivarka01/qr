@@ -3,3 +3,13 @@ channel = "stable-25_05"
 
 [agent]
 expertMode = true
+
+[userenv]
+
+[userenv.shared]
+TWITCH_BOT_USERNAME = "kapitanbot_"
+TWITCH_OAUTH_TOKEN = "oauth:zxhhw8znf4w0t5hg6nxzmtiixquxmb"
+TWITCH_CHANNEL = "themultivarka"
+QR_COMMAND_PERMISSION = "mods"
+QR_COMMAND_COOLDOWN = "1"
+OVERLAY_DISPLAY_SECONDS = "15"
