@@ -1,0 +1,794 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<title>Twitch QR Overlay</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+  :root{
+    --bg-card: #131A2E;
+    --bg-card-soft: #1A2238;
+    --surface: rgba(255,255,255,.055);
+    --stroke: rgba(255,255,255,0.08);
+    --text-primary: #EDEFF7;
+    --text-secondary: #8B92AC;
+    --accent: #4FA3E8;
+    --accent-2: #8A5CFF;
+    --accent-glow: #4FA3E8;
+    --white: #FFFFFF;
+  }
+
+  *{ box-sizing: border-box; }
+
+  html,body{
+    margin:0; padding:0;
+    width:100%; height:100%;
+    background: transparent;
+    overflow: hidden;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+
+  #stage{
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 30px;
+    padding-bottom: 48px;
+    pointer-events: none;
+  }
+
+  .wrap{
+    display: flex;
+    align-items: stretch;
+    gap: 30px;
+    opacity: 0;
+    transform: translateY(70px) scale(.97);
+    transition: opacity .5s cubic-bezier(.2,.8,.2,1), transform .5s cubic-bezier(.2,.8,.2,1);
+  }
+  .wrap.visible{ opacity: 1; transform: translateY(0) scale(1); }
+  .wrap.leaving{ opacity: 0; transform: translateY(60px) scale(.97); transition-duration: .4s; }
+
+  @keyframes gentleSwayLeft{
+    0%, 100% { transform: translateX(0) rotate(-0.55deg) translateY(0); }
+    50%      { transform: translateX(0) rotate(0.55deg) translateY(-6px); }
+  }
+  @keyframes gentleSwayRight{
+    0%, 100% { transform: translateX(0) rotate(0.55deg) translateY(-4px); }
+    50%      { transform: translateX(0) rotate(-0.55deg) translateY(2px); }
+  }
+  .phone-frame.swaying{
+    animation: gentleSwayLeft 6.5s ease-in-out infinite;
+  }
+  .qr-side.swaying{
+    animation: gentleSwayRight 7.2s ease-in-out infinite;
+  }
+
+  /* ========================================================
+     ЛЕВАЯ КАРТОЧКА — "Obsidian Glass": премиальная тёмная
+     поверхность со слоистыми акцентными свечениями и
+     стеклянными (glassmorphism) панелями поверх неё.
+     ======================================================== */
+
+  .phone-frame{
+    position: relative;
+    width: 336px;
+    height: 552px;
+    border-radius: 30px;
+    overflow: hidden;
+    box-shadow: 0 24px 56px rgba(0,0,0,.5);
+    opacity: 0;
+    transform: translateY(140px);
+    transition: opacity .6s cubic-bezier(.16,.8,.2,1) .04s, transform .6s cubic-bezier(.16,.8,.2,1) .04s;
+  }
+  .wrap.visible .phone-frame{ opacity: 1; transform: translateY(0); }
+
+  .post-card{
+    position: relative;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    background: linear-gradient(175deg, var(--bg-card-soft) 0%, var(--bg-card) 100%);
+    overflow: hidden;
+  }
+
+  .post-card .deco{
+    position: absolute;
+    inset: 0;
+    width: 100%; height: 100%;
+    opacity: .12;
+    pointer-events: none;
+  }
+
+  .post-card > .content{
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    padding: 16px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ---------- Шапка: плоская, без подложки ---------- */
+
+  .post-header{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 12px;
+    flex-shrink: 0;
+  }
+  .back-chevron{
+    color: var(--text-primary);
+    font-size: 19px;
+    font-weight: 600;
+    line-height: 1;
+    flex-shrink: 0;
+  }
+  .post-header-left{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .post-header-text{
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+  }
+  .post-channel-name{
+    color: var(--text-primary);
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .post-channel-sub{
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .avatar-ring{
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    flex-shrink: 0;
+  }
+  .post-avatar{
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    object-fit: cover;
+    background: #232b45;
+    display: block;
+  }
+
+  .post-scroll{
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-right: 4px;
+    margin-right: -4px;
+  }
+  .post-scroll::-webkit-scrollbar{ width: 4px; }
+  .post-scroll::-webkit-scrollbar-track{ background: transparent; }
+  .post-scroll::-webkit-scrollbar-thumb{
+    background: rgba(255,255,255,.16);
+    border-radius: 4px;
+  }
+
+  /* ---------- Закреплённое сообщение (если есть данные) ---------- */
+  .pinned-box{
+    display: none;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+    position: relative;
+    padding: 8px 12px 8px 14px;
+    margin-bottom: 10px;
+    background: var(--surface);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .pinned-box.active{ display: flex; }
+  .pinned-box::before{
+    content: '';
+    position: absolute;
+    left: 0; top: 0; bottom: 0;
+    width: 2px;
+    background: var(--accent);
+  }
+  .pinned-box-text{ min-width: 0; flex: 1; }
+  .pinned-title{
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    margin-bottom: 1px;
+  }
+  .pinned-text{
+    color: var(--text-secondary);
+    font-size: 12px;
+    font-weight: 400;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .pinned-close{
+    color: var(--text-secondary);
+    font-size: 15px;
+    line-height: 1;
+    flex-shrink: 0;
+    opacity: .7;
+  }
+
+  /* Фото: сохраняем естественные пропорции — не обрезаем в квадрат.
+     Одиночное фото просто масштабируется по ширине, высота — по аспекту
+     самой картинки (портретные будут выше, альбомные — ниже), как в Telegram. */
+  .photos{
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  .photos.single{ display: block; }
+  .photos.single img{
+    width: 100%;
+    height: auto;
+    max-height: 340px;
+    object-fit: contain;
+    background: #0000;
+  }
+  .photos img{
+    width: 50%;
+    aspect-ratio: 1 / 1;
+    object-fit: cover;
+    border-radius: 12px;
+    display: block;
+    background: #232b45;
+  }
+  .photos.single img{
+    border-radius: 12px;
+  }
+  .photos:empty{ display:none; margin:0; }
+
+  .post-link{
+    display: none;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 500;
+    margin-bottom: 8px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .post-link.active{ display: block; }
+
+  .post-text{
+    color: var(--text-primary);
+    font-size: 13.5px;
+    line-height: 1.42;
+    font-weight: 400;
+    white-space: pre-wrap;
+    margin: 0 0 10px;
+  }
+  .post-text:empty{ display:none; margin:0; }
+
+  .reactions{
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin-bottom: 8px;
+  }
+  .reactions:empty{ display:none; margin:0; }
+  .reaction-pill{
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    background: var(--surface);
+    border-radius: 999px;
+    padding: 5px 10px 5px 8px;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text-primary);
+  }
+  .reaction-pill .emoji{ font-size: 13px; line-height: 1; }
+
+  /* ---------- Нижняя панель: плоская, тонкий разделитель ---------- */
+
+  .post-footer{
+    flex-shrink: 0;
+    padding-top: 10px;
+    border-top: 1px solid var(--stroke);
+    margin-top: 10px;
+  }
+
+  .views-row{
+    display: flex;
+    justify-content: flex-end;
+    color: var(--text-secondary);
+    font-size: 11.5px;
+    font-weight: 400;
+    margin-bottom: 8px;
+    flex-shrink: 0;
+  }
+  .views-row:empty{ display:none; margin:0; }
+
+  .comment-row{
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    color: var(--accent);
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .comment-row .left{
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+  }
+  .comment-avatars{
+    display: flex;
+    flex-shrink: 0;
+  }
+  .comment-avatars span{
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    border: 2px solid var(--bg-card);
+    margin-left: -6px;
+  }
+  .comment-avatars span:first-child{ margin-left: 0; }
+  .comment-row .chevron{
+    color: var(--text-secondary);
+    font-weight: 700;
+    opacity: .6;
+    flex-shrink: 0;
+  }
+
+  /* ---------- ПРАВАЯ КАРТОЧКА: QR ---------- */
+
+  .qr-side{
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    opacity: 0;
+    transform: translateY(18px) scale(.94);
+    transition: opacity .5s ease .12s, transform .5s cubic-bezier(.2,.85,.25,1.15) .12s;
+  }
+  .wrap.visible .qr-side{ opacity: 1; transform: translateY(0) scale(1); }
+
+  .qr-glow-wrap{
+    position: relative;
+    width: 360px;
+    height: 360px;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .qr-glow{
+    position: absolute;
+    inset: -6px;
+    background: radial-gradient(circle at 50% 48%, var(--accent-glow) 0%, rgba(138,92,255,.4) 40%, transparent 72%);
+    filter: blur(22px);
+    opacity: .85;
+    z-index: 0;
+    animation: glowPulse 3.2s ease-in-out infinite;
+  }
+  @keyframes glowPulse{
+    0%, 100% { opacity: .65; transform: scale(1); }
+    50%      { opacity: .95; transform: scale(1.04); }
+  }
+  .qr-card{
+    position: relative;
+    z-index: 1;
+    width: 340px;
+    height: 340px;
+    background: var(--white);
+    border-radius: 34px;
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: 0 18px 46px rgba(108,92,255,.32);
+    overflow: hidden;
+    padding: 14px;
+    border: 1px solid rgba(255,255,255,.6);
+  }
+  #qr-target{
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    max-height: 100%;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  #qr-target svg{
+    display: block;
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100%;
+    max-height: 100%;
+  }
+
+  .qr-username-glass{
+    padding: 12px 28px;
+    border-radius: 999px;
+    background: rgba(255,255,255,.14);
+    border: 1px solid rgba(255,255,255,.3);
+    backdrop-filter: blur(18px) saturate(160%);
+    -webkit-backdrop-filter: blur(18px) saturate(160%);
+    box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.45);
+  }
+  .qr-username{
+    font-size: 24px;
+    font-weight: 800;
+    color: var(--white);
+    text-shadow: 0 1px 8px rgba(0,0,0,.3);
+    letter-spacing: .1px;
+    white-space: nowrap;
+  }
+</style>
+</head>
+<body>
+
+<div id="stage">
+  <div class="wrap" id="wrap">
+
+    <div class="phone-frame" id="phone-frame">
+      <div class="post-card" id="post-card">
+      <svg class="deco" viewBox="0 0 332 460" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <pattern id="doodlePattern" width="110" height="110" patternUnits="userSpaceOnUse" patternTransform="rotate(8)">
+            <!-- бумажный самолётик -->
+            <path d="M14 18 L34 10 L26 16 L30 26 Z" fill="#0A0D18" opacity=".9"/>
+            <!-- звезда -->
+            <path d="M70 8 L72 14 L78 16 L72 18 L70 24 L68 18 L62 16 L68 14 Z" fill="#0A0D18"/>
+            <!-- сердечко -->
+            <path d="M18 55 c0,-4 6,-4 6,0 c0,-4 6,-4 6,0 c0,5 -6,9 -6,9 c0,0 -6,-4 -6,-9 Z" fill="#0A0D18" opacity=".85"/>
+            <!-- камера -->
+            <rect x="55" y="52" width="16" height="12" rx="2" fill="none" stroke="#0A0D18" stroke-width="1.3"/>
+            <circle cx="63" cy="58" r="3.2" fill="none" stroke="#0A0D18" stroke-width="1.2"/>
+            <!-- ракета -->
+            <path d="M92 40 c3,-6 3,-14 0,-18 c-3,4 -3,12 0,18 Z" fill="#0A0D18" opacity=".9"/>
+            <path d="M88 40 l4 4 l4 -4" fill="none" stroke="#0A0D18" stroke-width="1.2"/>
+            <!-- нотка -->
+            <path d="M22 90 v-14 l10 -2 v14" fill="none" stroke="#0A0D18" stroke-width="1.3"/>
+            <circle cx="20" cy="90" r="3" fill="#0A0D18" opacity=".85"/>
+            <circle cx="30" cy="88" r="3" fill="#0A0D18" opacity=".85"/>
+            <!-- подарок -->
+            <rect x="80" y="82" width="14" height="12" rx="1.5" fill="none" stroke="#0A0D18" stroke-width="1.2"/>
+            <line x1="87" y1="82" x2="87" y2="94" stroke="#0A0D18" stroke-width="1.2"/>
+            <!-- маленькие точки-конфетти -->
+            <circle cx="50" cy="30" r="1.6" fill="#0A0D18"/>
+            <circle cx="100" cy="70" r="1.4" fill="#0A0D18"/>
+            <circle cx="8" cy="100" r="1.4" fill="#0A0D18"/>
+            <circle cx="45" cy="100" r="1.2" fill="#0A0D18"/>
+          </pattern>
+        </defs>
+        <rect x="0" y="0" width="332" height="460" fill="url(#doodlePattern)"/>
+      </svg>
+
+      <div class="content">
+        <div class="post-header">
+          <div class="post-header-left">
+            <span class="back-chevron">‹</span>
+            <div class="post-header-text">
+              <span class="post-channel-name" id="post-channel-name"></span>
+              <span class="post-channel-sub" id="post-channel-sub"></span>
+            </div>
+          </div>
+          <div class="avatar-ring">
+            <img class="post-avatar" id="post-avatar" src="" alt="" />
+          </div>
+        </div>
+
+        <div class="post-scroll" id="post-scroll">
+          <div class="pinned-box" id="pinned-box">
+            <div class="pinned-box-text">
+              <div class="pinned-title">Закреплённое сообщение</div>
+              <div class="pinned-text" id="pinned-text"></div>
+            </div>
+            <span class="pinned-close">×</span>
+          </div>
+          <div class="photos" id="photos"></div>
+          <a class="post-link" id="post-link" target="_blank" rel="noopener"></a>
+          <div class="post-text" id="post-text"></div>
+          <div class="reactions" id="reactions"></div>
+        </div>
+
+        <div class="views-row" id="views-row"></div>
+
+        <div class="post-footer">
+          <div class="comment-row">
+            <span class="left">
+              <span class="comment-avatars" id="comment-avatars">
+                <span style="background:#54A0FF"></span>
+                <span style="background:#1DD1A1"></span>
+                <span style="background:#FF9F43"></span>
+              </span>
+              <span id="comment-label">Прокомментировать</span>
+            </span>
+            <span class="chevron">›</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    </div>
+
+    <div class="qr-side">
+      <div class="qr-glow-wrap">
+        <div class="qr-glow"></div>
+        <div class="qr-card">
+          <div id="qr-target"></div>
+        </div>
+      </div>
+      <div class="qr-username-glass">
+        <div class="qr-username" id="qr-username"></div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://unpkg.com/qr-code-styling@1.6.0-rc.1/lib/qr-code-styling.js"></script>
+<script>
+  const WS_URL = `ws://${location.host}/ws`;
+  const wrap = document.getElementById('wrap');
+  const postCardEl = document.getElementById('phone-frame');
+  const qrSideEl = document.querySelector('.qr-side');
+  let hideTimer = null;
+  let swayTimer = null;
+  let scrollAnimId = null;
+
+  function connect(){
+    const ws = new WebSocket(WS_URL);
+    ws.onmessage = (ev) => {
+      try {
+        const msg = JSON.parse(ev.data);
+        if (msg.type === 'show_qr') showOverlay(msg.data, msg.displaySeconds || 12);
+      } catch (e) { console.error(e); }
+    };
+    ws.onclose = () => setTimeout(connect, 2000);
+  }
+  connect();
+
+  function easeInOutQuad(t){
+    return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  }
+
+  /**
+   * Плавно скроллит .post-scroll от текущей позиции до maxScroll и
+   * останавливается внизу. Оверлей в OBS статичный — зритель не может
+   * скроллить сам, поэтому если пост не помещается целиком, контент должен
+   * "проехать" вниз автоматически, пока карточка на экране.
+   */
+  function startAutoScroll(el, { startDelayMs, scrollMs }) {
+    if (scrollAnimId) cancelAnimationFrame(scrollAnimId);
+    const maxScroll = el.scrollHeight - el.clientHeight;
+    if (maxScroll <= 4) return; // помещается целиком, скроллить нечего
+
+    const beginTime = performance.now() + startDelayMs;
+
+    function tick(now){
+      if (now < beginTime) {
+        scrollAnimId = requestAnimationFrame(tick);
+        return;
+      }
+      const elapsed = now - beginTime;
+      const progress = Math.min(elapsed / scrollMs, 1);
+      el.scrollTop = easeInOutQuad(progress) * maxScroll;
+      if (progress < 1) {
+        scrollAnimId = requestAnimationFrame(tick);
+      }
+    }
+    scrollAnimId = requestAnimationFrame(tick);
+  }
+
+  function escapeHtml(str){
+    return (str || '').replace(/[&<>"']/g, (c) => ({
+      '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+    }[c]));
+  }
+
+  function formatViews(v){
+    if (!v) return '';
+    return `👁 ${v}`;
+  }
+
+  function formatDate(iso){
+    if (!iso) return '';
+    const d = new Date(iso);
+    if (isNaN(d.getTime())) return '';
+    return d.toLocaleString('ru-RU', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+  }
+
+
+  /**
+   * Обрезает картинку в круг через canvas и возвращает data:-URI PNG.
+   * qr-code-styling сам по себе не умеет круглые картинки — только квадрат
+   * или встроенный dotsOptions "hideBackgroundDots" вокруг квадрата, поэтому
+   * маскируем сами до передачи в библиотеку.
+   */
+  function circularizeImage(src){
+    return new Promise((resolve) => {
+      if (!src) { resolve(null); return; }
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      img.onload = () => {
+        const size = Math.min(img.naturalWidth, img.naturalHeight) || 256;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+        const ctx = canvas.getContext('2d');
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(size / 2, size / 2, size / 2, 0, Math.PI * 2);
+        ctx.closePath();
+        ctx.clip();
+        // центрируем кроп, если картинка не квадратная
+        const sx = (img.naturalWidth - size) / 2;
+        const sy = (img.naturalHeight - size) / 2;
+        ctx.drawImage(img, sx, sy, size, size, 0, 0, size, size);
+        ctx.restore();
+        try {
+          resolve(canvas.toDataURL('image/png'));
+        } catch {
+          resolve(src); // canvas "потёк" из-за CORS — используем оригинал как фолбэк
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = src;
+    });
+  }
+
+  async function buildQr(link, avatarUrl){
+    const target = document.getElementById('qr-target');
+    target.innerHTML = '';
+    const circularAvatar = await circularizeImage(avatarUrl);
+    const qr = new QRCodeStyling({
+      width: 312,
+      height: 312,
+      type: 'svg',
+      data: link,
+      margin: 4,
+      qrOptions: { errorCorrectionLevel: 'H' },
+      dotsOptions: {
+        type: 'rounded',
+        gradient: {
+          type: 'linear',
+          rotation: 0.7,
+          colorStops: [
+            { offset: 0, color: '#3DB8F5' },
+            { offset: 1, color: '#8A5CFF' },
+          ],
+        },
+      },
+      cornersSquareOptions: { type: 'dot', color: '#3A2B7A' },
+      cornersDotOptions: { type: 'dot', color: '#6C6CFF' },
+      backgroundOptions: { color: 'transparent' },
+      image: circularAvatar || undefined,
+      imageOptions: { crossOrigin: 'anonymous', margin: 6, imageSize: 0.4, hideBackgroundDots: true },
+    });
+    qr.append(target);
+  }
+
+  function showOverlay(data, displaySeconds){
+    if (scrollAnimId) cancelAnimationFrame(scrollAnimId);
+    document.getElementById('post-scroll').scrollTop = 0;
+
+    const hasPost = Boolean(data.postId);
+
+    // шапка: аватар + название + подписчики
+    const avatarImg = document.getElementById('post-avatar');
+    if (data.avatarDataUri || data.avatarUrl) {
+      avatarImg.src = data.avatarDataUri || data.avatarUrl;
+      avatarImg.style.display = '';
+    } else {
+      avatarImg.removeAttribute('src');
+      avatarImg.style.display = 'none';
+    }
+    document.getElementById('post-channel-name').textContent = data.channelTitle || data.channelUsername || '';
+    document.getElementById('post-channel-sub').textContent = data.subscriberCount || 'Telegram канал';
+
+    // фото
+    const photosEl = document.getElementById('photos');
+    photosEl.innerHTML = '';
+    photosEl.className = 'photos' + (data.photos && data.photos.length === 1 ? ' single' : '');
+    (data.photos || []).slice(0, 2).forEach((src) => {
+      const img = document.createElement('img');
+      img.src = src;
+      photosEl.appendChild(img);
+    });
+
+    // ссылка отдельной строкой (как в реальном Telegram) — вытаскиваем первый
+    // URL из текста поста и убираем его из основного текста, чтобы не дублировать
+    const linkEl = document.getElementById('post-link');
+    const rawText = hasPost ? (data.text || '') : '';
+    const urlMatch = rawText.match(/https?:\/\/\S+/);
+    if (urlMatch) {
+      linkEl.href = urlMatch[0];
+      linkEl.textContent = urlMatch[0];
+      linkEl.classList.add('active');
+    } else {
+      linkEl.classList.remove('active');
+      linkEl.removeAttribute('href');
+    }
+    const textWithoutLink = urlMatch ? rawText.replace(urlMatch[0], '').trim() : rawText;
+
+    // текст поста / резервное сообщение, если поста нет
+    document.getElementById('post-text').textContent = hasPost
+      ? textWithoutLink
+      : (data.fallbackReason ? `Не нашёл последний пост: ${data.fallbackReason}` : '');
+
+    // реакции
+    const reactionsEl = document.getElementById('reactions');
+    reactionsEl.innerHTML = '';
+    (data.reactions || []).forEach((r) => {
+      const pill = document.createElement('div');
+      pill.className = 'reaction-pill';
+      pill.innerHTML = `<span class="emoji">${escapeHtml(r.emoji)}</span><span>${r.count}</span>`;
+      reactionsEl.appendChild(pill);
+    });
+
+    // просмотры + время (справа, как в реальном Telegram)
+    const viewsEl = document.getElementById('views-row');
+    const viewsText = [formatViews(data.views), formatDate(data.dateTime)].filter(Boolean).join('  ');
+    viewsEl.textContent = viewsText;
+
+    document.getElementById('comment-label').textContent = hasPost ? 'Прокомментировать' : 'Открыть канал';
+    document.getElementById('comment-avatars').style.display = hasPost ? '' : 'none';
+
+    // QR + подпись — ведём на сам канал, а не на конкретный пост
+    document.getElementById('qr-username').textContent = '@' + data.channelUsername;
+    buildQr(`https://t.me/${data.channelUsername}`, data.avatarDataUri || data.avatarUrl);
+
+    // показать
+    if (hideTimer) clearTimeout(hideTimer);
+    if (swayTimer) clearTimeout(swayTimer);
+    postCardEl.classList.remove('swaying');
+    qrSideEl.classList.remove('swaying');
+    wrap.classList.remove('leaving');
+    requestAnimationFrame(() => wrap.classList.add('visible'));
+
+    // покачивание включаем чуть позже, когда карточки уже "въехали" на место —
+    // иначе конфликтует с transform анимации появления
+    swayTimer = setTimeout(() => {
+      postCardEl.classList.add('swaying');
+      qrSideEl.classList.add('swaying');
+    }, 560);
+
+    // считаем таймингы автоскролла после того, как браузер разложил контент
+    requestAnimationFrame(() => {
+      const scrollEl = document.getElementById('post-scroll');
+      const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
+
+      const START_DELAY = 1300;   // пауза перед началом скролла — дать прочитать верх
+      const END_PAUSE = 1900;     // пауза внизу перед скрытием — дать дочитать низ
+      const PX_PER_MS = 1 / 22;   // скорость прокрутки: чем длиннее пост, тем дольше едем
+
+      let totalMs = displaySeconds * 1000;
+
+      if (maxScroll > 4) {
+        const scrollMs = Math.min(Math.max(maxScroll / PX_PER_MS, 2200), 9000);
+        startAutoScroll(scrollEl, { startDelayMs: START_DELAY, scrollMs });
+        totalMs = Math.max(totalMs, START_DELAY + scrollMs + END_PAUSE);
+      }
+
+      hideTimer = setTimeout(() => {
+        postCardEl.classList.remove('swaying');
+        qrSideEl.classList.remove('swaying');
+        wrap.classList.add('leaving');
+        wrap.classList.remove('visible');
+      }, totalMs);
+    });
+  }
+</script>
+</body>
+</html>
