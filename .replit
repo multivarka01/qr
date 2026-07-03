@@ -1,3 +1,4 @@
+modules = ["nodejs-24"]
 [nix]
 channel = "stable-25_05"
 
@@ -7,9 +8,35 @@ expertMode = true
 [userenv]
 
 [userenv.shared]
-TWITCH_BOT_USERNAME = "kapitanbot_"
-TWITCH_OAUTH_TOKEN = "oauth:zxhhw8znf4w0t5hg6nxzmtiixquxmb"
-TWITCH_CHANNEL = "themultivarka"
 QR_COMMAND_PERMISSION = "mods"
 QR_COMMAND_COOLDOWN = "1"
 OVERLAY_DISPLAY_SECONDS = "15"
+PORT = "8080"
+
+[workflows]
+runButton = "Project"
+
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "Start application"
+
+[[workflows.workflow]]
+name = "Start application"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "node index.js"
+waitForPort = 8080
+
+[workflows.workflow.metadata]
+outputType = "console"
+
+[[ports]]
+localPort = 8080
+externalPort = 80

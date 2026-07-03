@@ -8,6 +8,16 @@ const tmi = require('tmi.js');
 
 const { getTelegramPreview } = require('./lib/telegram');
 
+// ---------- Startup validation ----------
+
+const REQUIRED_ENV = ['TWITCH_BOT_USERNAME', 'TWITCH_OAUTH_TOKEN', 'TWITCH_CHANNEL'];
+const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+if (missing.length > 0) {
+  console.error(`[startup] Отсутствуют обязательные переменные окружения: ${missing.join(', ')}`);
+  console.error('[startup] Заполните .env (или Replit Secrets) и перезапустите приложение.');
+  process.exit(1);
+}
+
 const PORT = parseInt(process.env.PORT || '8123', 10);
 const PERMISSION = (process.env.QR_COMMAND_PERMISSION || 'mods').toLowerCase();
 const COOLDOWN_MS = parseInt(process.env.QR_COMMAND_COOLDOWN || '15', 10) * 1000;
