@@ -350,35 +350,20 @@
     display: flex; align-items: center; justify-content: center;
     overflow: visible;
   }
-  /* Шарики-бокэ позади QR */
-  .qr-bubble {
+  /* Подсветка из-за спины карточки */
+  .qr-backlight {
     position: absolute;
-    border-radius: 50%;
-    background: radial-gradient(circle at 35% 35%, rgba(255,255,255,.9), rgba(10,132,255,.8) 50%, rgba(10,100,255,.3));
-    filter: blur(1px);
+    width: 286px; height: 286px;
+    border-radius: 30px;
+    background: #0A84FF;
     z-index: 0;
-    pointer-events: none;
+    filter: blur(18px);
+    transform: scale(1.04);
+    animation: backlightPulse 3s ease-in-out infinite;
   }
-
-  @keyframes bubbleFloat1 {
-    0%,100% { transform: translate(0,    0   ) scale(1);    opacity: .75; }
-    33%      { transform: translate(8px, -12px) scale(1.1);  opacity: 1;   }
-    66%      { transform: translate(-6px, 5px ) scale(.92);  opacity: .6;  }
-  }
-  @keyframes bubbleFloat2 {
-    0%,100% { transform: translate(0,   0   ) scale(1);   opacity: .6;  }
-    40%      { transform: translate(-10px,-8px) scale(1.15); opacity: 1;  }
-    70%      { transform: translate(7px,  9px) scale(.88); opacity: .5;  }
-  }
-  @keyframes bubbleFloat3 {
-    0%,100% { transform: translate(0,  0   ) scale(1);    opacity: .8;  }
-    30%      { transform: translate(5px,-14px) scale(1.08); opacity: .55; }
-    65%      { transform: translate(-9px, 4px) scale(1.2);  opacity: 1;   }
-  }
-  @keyframes bubbleFloat4 {
-    0%,100% { transform: translate(0,   0   ) scale(1);   opacity: .55; }
-    45%      { transform: translate(-7px,-6px ) scale(1.12); opacity: .9;  }
-    80%      { transform: translate(10px, 8px ) scale(.9);  opacity: .45; }
+  @keyframes backlightPulse {
+    0%,100% { opacity: .75; filter: blur(18px); transform: scale(1.04); }
+    50%      { opacity: 1;   filter: blur(22px); transform: scale(1.07); }
   }
 
   .qr-card {
@@ -485,21 +470,8 @@
     <!-- ПРАВАЯ КАРТОЧКА: QR -->
     <div class="qr-side" id="qr-side-el">
       <div class="qr-glow-wrap">
-        <!-- шарики-бокэ ЗА карточкой, высовываются по краям -->
-        <!-- верхний ряд -->
-        <div class="qr-bubble" style="width:46px;height:46px;top:4px; left:30px;  animation:bubbleFloat1 5.1s ease-in-out infinite;"></div>
-        <div class="qr-bubble" style="width:28px;height:28px;top:0px; left:50%;   animation:bubbleFloat3 6.0s ease-in-out infinite .5s;"></div>
-        <div class="qr-bubble" style="width:36px;height:36px;top:8px; right:28px; animation:bubbleFloat2 5.7s ease-in-out infinite 1s;"></div>
-        <!-- левый край -->
-        <div class="qr-bubble" style="width:52px;height:52px;top:30%; left:0px;   animation:bubbleFloat2 6.5s ease-in-out infinite 1.4s;"></div>
-        <div class="qr-bubble" style="width:22px;height:22px;top:58%; left:6px;   animation:bubbleFloat4 5.4s ease-in-out infinite .3s;"></div>
-        <!-- правый край -->
-        <div class="qr-bubble" style="width:40px;height:40px;top:22%; right:2px;  animation:bubbleFloat1 6.8s ease-in-out infinite .9s;"></div>
-        <div class="qr-bubble" style="width:20px;height:20px;top:62%; right:4px;  animation:bubbleFloat3 5.2s ease-in-out infinite 2s;"></div>
-        <!-- нижний ряд -->
-        <div class="qr-bubble" style="width:44px;height:44px;bottom:4px;left:26px; animation:bubbleFloat3 5.9s ease-in-out infinite .6s;"></div>
-        <div class="qr-bubble" style="width:24px;height:24px;bottom:2px;left:48%; animation:bubbleFloat2 7.0s ease-in-out infinite 1.2s;"></div>
-        <div class="qr-bubble" style="width:32px;height:32px;bottom:6px;right:24px;animation:bubbleFloat4 5.6s ease-in-out infinite .2s;"></div>
+        <!-- подсветка из-за спины карточки -->
+        <div class="qr-backlight"></div>
         <div class="qr-card">
           <div id="qr-target"></div>
         </div>
