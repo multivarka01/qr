@@ -631,10 +631,14 @@
     };
   }
 
+  let _qrGen = 0; // счётчик поколений — защита от гонки рендера
+
   async function buildQr(link, avatarUrl) {
+    const gen = ++_qrGen; // захватываем текущее поколение
     const target = document.getElementById('qr-target');
     target.innerHTML = '';
     const circularAvatar = await circularizeImage(avatarUrl);
+    if (gen !== _qrGen) return; // пришёл новый запрос пока мы грузили — выходим
 
     // Извлекаем цвет из аватарки если она есть
     let mainColor = '#0A84FF', darkColor = '#003D99';

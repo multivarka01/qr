@@ -61,6 +61,40 @@ const tmiClient = new tmi.Client({
 
 let lastTriggerAt = 0;
 
+// ---------- Очередь команд !qr ----------
+// Обрабатываем по одной — не даём новому запросу смешаться с текущим рендером.
+
+const QR_QUEUE_MAX = 3; // максимум команд в очереди
+const qrQueue = [];
+let qrBusy = false;
+
+async function processQrQueue(channel) {
+  if (qrBusy || qrQueue.length === 0) return;
+  qrBusy = true;
+  const { tags, link } = qrQueue.shift();
+  try {
+    const preview = await getTelegramPreview(link);
+    broadcastToOverlay({
+      type: 'show_qr',
+      displaySeconds: DISPLAY_SECONDS,
+      data: { ...preview, link: preview.postUrl },
+    });
+    if (preview.isFallback) {
+      tmiClient.say(channel,
+        `@${tags['display-name']} показал только QR — не нашёл последний пост (${preview.fallbackReason})`);
+    }
+    console.log(`[twitch] !qr вызван пользователем ${tags['display-name']}: ${link}`);
+  } catch (err) {
+    console.error('[twitch] Ошибка обработки !qr:', err.message);
+    tmiClient.say(channel,
+      `@${tags['display-name']} не получилось загрузить превью — проверь, что канал публичный`);
+  } finally {
+    qrBusy = false;
+    // небольшая пауза между показами чтобы оверлей успел смениться
+    setTimeout(() => processQrQueue(channel), 500);
+  }
+}
+
 function userIsAllowed(tags) {
   if (PERMISSION === 'everyone') return true;
   const isBroadcaster = tags.badges && tags.badges.broadcaster === '1';
@@ -88,6 +122,9 @@ tmiClient.on('message', async (channel, tags, message, self) => {
   if (now - lastTriggerAt < COOLDOWN_MS) {
     return; // тихо игнорируем спам команды
   }
+  // Кулдаун обновляем сразу — даже если запрос упадёт с ошибкой,
+  // чтобы сломанные ссылки не долбили Telegram без ограничений
+  lastTriggerAt = now;
 
   const link = trimmed.slice(3).trim();
   if (!link) {
@@ -95,32 +132,9 @@ tmiClient.on('message', async (channel, tags, message, self) => {
     return;
   }
 
-  try {
-    const preview = await getTelegramPreview(link);
-    lastTriggerAt = now;
-
-    broadcastToOverlay({
-      type: 'show_qr',
-      displaySeconds: DISPLAY_SECONDS,
-      data: {
-        ...preview,
-        link: preview.postUrl,
-      },
-    });
-
-    if (preview.isFallback) {
-      tmiClient.say(
-        channel,
-        `@${tags['display-name']} показал только QR — не нашёл последний пост (${preview.fallbackReason})`
-      );
-    }
-
-    console.log(`[twitch] !qr вызван пользователем ${tags['display-name']}: ${link}`);
-  } catch (err) {
-    console.error('[twitch] Ошибка обработки !qr:', err.message);
-    tmiClient.say(
-      channel,
-      `@${tags['display-name']} не получилось загрузить превью поста — проверь, что канал и пост публичные`
-    );
+  if (qrQueue.length >= QR_QUEUE_MAX) {
+    return; // очередь переполнена — молча игнорируем
   }
+  qrQueue.push({ tags, link });
+  processQrQueue(channel);
 });
