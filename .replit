@@ -9,7 +9,7 @@ expertMode = true
 
 [userenv.shared]
 QR_COMMAND_PERMISSION = "mods"
-QR_COMMAND_COOLDOWN = "1"
+QR_COMMAND_COOLDOWN = "0"
 OVERLAY_DISPLAY_SECONDS = "15"
 PORT = "8080"
 

@@ -145,7 +145,6 @@
     display: flex;
     flex-direction: column;
     overflow: hidden;
-    /* Тонкий фоновый паттерн как в Telegram */
     background-image: radial-gradient(circle at 20% 80%, rgba(10,132,255,.04) 0%, transparent 60%),
                       radial-gradient(circle at 80% 20%, rgba(10,132,255,.03) 0%, transparent 50%);
   }
@@ -156,6 +155,26 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding: 8px 0 4px;
+  }
+
+  /* Когда пост — только фото без текста: растягиваем пузырёк на всю высоту */
+  .post-scroll.photo-only {
+    display: flex;
+    flex-direction: column;
+  }
+  .post-scroll.photo-only .tg-message {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+  .post-scroll.photo-only .tg-photos {
+    flex: 1;
+  }
+  .post-scroll.photo-only .tg-photos.single img {
+    height: 100%;
+    max-height: none;
+    object-fit: contain;
   }
   .post-scroll::-webkit-scrollbar { width: 0; }
 
@@ -636,6 +655,11 @@
 
     const textWrap = document.getElementById('tg-text-wrap');
     textWrap.style.display = (urlMatch || textWithoutLink || !hasPost) ? '' : 'none';
+
+    // Режим «только фото» — центрируем картинку вертикально
+    const scrollEl2 = document.getElementById('post-scroll');
+    const isPhotoOnly = photoArr.length > 0 && !urlMatch && !textWithoutLink && hasPost;
+    scrollEl2.classList.toggle('photo-only', isPhotoOnly);
 
     // Мета
     const metaEl = document.getElementById('views-row');
