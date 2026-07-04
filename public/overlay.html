@@ -569,10 +569,65 @@
     });
   }
 
+  /**
+   * Берёт несколько доминирующих цветов из canvas-аватарки.
+   * Возвращает { main, dark } — основной и затемнённый варианты.
+   */
+  function extractAvatarColors(canvas) {
+    const ctx = canvas.getContext('2d');
+    const s = canvas.width;
+    // Сэмплируем пиксели по сетке 8×8 в центральном круге
+    const samples = [];
+    const step = Math.floor(s / 8);
+    for (let y = step; y < s - step; y += step) {
+      for (let x = step; x < s - step; x += step) {
+        const dx = x - s/2, dy = y - s/2;
+        if (dx*dx + dy*dy > (s/2 - step)*(s/2 - step)) continue; // за кругом
+        const [r, g, b] = ctx.getImageData(x, y, 1, 1).data;
+        if (r < 20 && g < 20 && b < 20) continue; // skip black bg
+        if (r > 235 && g > 235 && b > 235) continue; // skip white
+        samples.push([r, g, b]);
+      }
+    }
+    if (samples.length === 0) return { main: '#0A84FF', dark: '#003D99' };
+
+    // Средний цвет — достаточно для большинства аватарок
+    const avg = samples.reduce(([ar,ag,ab],[r,g,b]) => [ar+r, ag+g, ab+b], [0,0,0])
+      .map(v => Math.round(v / samples.length));
+
+    // Усиливаем насыщенность: тянем к максимальному каналу
+    const max = Math.max(...avg);
+    const boosted = avg.map(v => Math.min(255, Math.round(v + (max - v) * 0.5)));
+    const darkened = boosted.map(v => Math.round(v * 0.55));
+
+    const toHex = ([r,g,b]) => '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+    return { main: toHex(boosted), dark: toHex(darkened) };
+  }
+
   async function buildQr(link, avatarUrl) {
     const target = document.getElementById('qr-target');
     target.innerHTML = '';
     const circularAvatar = await circularizeImage(avatarUrl);
+
+    // Извлекаем цвет из аватарки если она есть
+    let mainColor = '#0A84FF', darkColor = '#003D99';
+    if (circularAvatar) {
+      // circularizeImage уже нарисовала на canvas — рисуем снова для сэмплирования
+      const tmpImg = new Image();
+      await new Promise(res => { tmpImg.onload = res; tmpImg.onerror = res; tmpImg.src = circularAvatar; });
+      const tmpCanvas = document.createElement('canvas');
+      const sz = 64;
+      tmpCanvas.width = tmpCanvas.height = sz;
+      tmpCanvas.getContext('2d').drawImage(tmpImg, 0, 0, sz, sz);
+      const colors = extractAvatarColors(tmpCanvas);
+      mainColor = colors.main;
+      darkColor = colors.dark;
+    }
+
+    // Перекрашиваем подсветку под цвет аватарки
+    const backlight = document.querySelector('.qr-backlight');
+    if (backlight) backlight.style.background = mainColor;
+
     new QRCodeStyling({
       width: 258, height: 258,
       type: 'svg', data: link, margin: 4,
@@ -582,13 +637,13 @@
         gradient: {
           type: 'linear', rotation: 0.8,
           colorStops: [
-            { offset: 0, color: '#0A84FF' },
-            { offset: 1, color: '#0055CC' },
+            { offset: 0, color: mainColor },
+            { offset: 1, color: darkColor },
           ],
         },
       },
-      cornersSquareOptions: { type: 'dot', color: '#003D99' },
-      cornersDotOptions:   { type: 'dot', color: '#0A84FF' },
+      cornersSquareOptions: { type: 'dot', color: darkColor },
+      cornersDotOptions:   { type: 'dot', color: mainColor },
       backgroundOptions:   { color: 'transparent' },
       image: circularAvatar || undefined,
       imageOptions: { crossOrigin: 'anonymous', margin: 6, imageSize: 0.36, hideBackgroundDots: true },
