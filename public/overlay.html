@@ -740,9 +740,11 @@
     const textWrap = document.getElementById('tg-text-wrap');
     textWrap.style.display = (urlMatch || textWithoutLink || !hasPost) ? '' : 'none';
 
-    // Режим «только фото» — центрируем картинку вертикально
+    // Режим «только фото» — центрируем картинку вертикально.
+    // Применяем только когда: ровно 1 фото, нет текста/ссылки, нет реакций.
     const scrollEl2 = document.getElementById('post-scroll');
-    const isPhotoOnly = photoArr.length > 0 && !urlMatch && !textWithoutLink && hasPost;
+    const hasReactions = data.reactions && data.reactions.length > 0;
+    const isPhotoOnly = photoArr.length === 1 && !urlMatch && !textWithoutLink && hasPost && !hasReactions;
     scrollEl2.classList.toggle('photo-only', isPhotoOnly);
 
     // Мета
