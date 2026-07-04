@@ -569,39 +569,66 @@
     });
   }
 
+  function rgbToHsl(r, g, b) {
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h, s, l = (max + min) / 2;
+    if (max === min) { h = s = 0; }
+    else {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+        case g: h = ((b - r) / d + 2) / 6; break;
+        case b: h = ((r - g) / d + 4) / 6; break;
+      }
+    }
+    return [h, s, l];
+  }
+
+  function hslToHex(h, s, l) {
+    const a = s * Math.min(l, 1 - l);
+    const f = n => {
+      const k = (n + h * 12) % 12;
+      const v = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+      return Math.round(255 * v).toString(16).padStart(2, '0');
+    };
+    return `#${f(0)}${f(8)}${f(4)}`;
+  }
+
   /**
-   * Берёт несколько доминирующих цветов из canvas-аватарки.
-   * Возвращает { main, dark } — основной и затемнённый варианты.
+   * Сэмплирует пиксели аватарки, находит доминирующий оттенок (hue)
+   * и возвращает из него яркий насыщенный цвет — независимо от
+   * того, насколько тёмная или светлая исходная картинка.
    */
   function extractAvatarColors(canvas) {
     const ctx = canvas.getContext('2d');
     const s = canvas.width;
-    // Сэмплируем пиксели по сетке 8×8 в центральном круге
-    const samples = [];
-    const step = Math.floor(s / 8);
-    for (let y = step; y < s - step; y += step) {
-      for (let x = step; x < s - step; x += step) {
+    // Накапливаем взвешенные hue-голоса (вес = насыщенность пикселя)
+    const hueBuckets = new Array(36).fill(0); // 36 секторов по 10°
+    const step = Math.max(1, Math.floor(s / 10));
+    for (let y = 0; y < s; y += step) {
+      for (let x = 0; x < s; x += step) {
         const dx = x - s/2, dy = y - s/2;
-        if (dx*dx + dy*dy > (s/2 - step)*(s/2 - step)) continue; // за кругом
+        if (dx*dx + dy*dy > (s/2)*(s/2)) continue;
         const [r, g, b] = ctx.getImageData(x, y, 1, 1).data;
-        if (r < 20 && g < 20 && b < 20) continue; // skip black bg
-        if (r > 235 && g > 235 && b > 235) continue; // skip white
-        samples.push([r, g, b]);
+        // пропускаем почти-чёрные, почти-белые и почти-серые пиксели
+        const [h, sat, lit] = rgbToHsl(r, g, b);
+        if (sat < 0.15 || lit < 0.08 || lit > 0.92) continue;
+        hueBuckets[Math.floor(h * 36)] += sat; // насыщенный пиксель весит больше
       }
     }
-    if (samples.length === 0) return { main: '#0A84FF', dark: '#003D99' };
+    // Лучший сектор — тот, у которого больше всего насыщенных пикселей
+    const bestIdx = hueBuckets.indexOf(Math.max(...hueBuckets));
+    if (hueBuckets[bestIdx] === 0) return { main: '#0A84FF', dark: '#003D99' };
 
-    // Средний цвет — достаточно для большинства аватарок
-    const avg = samples.reduce(([ar,ag,ab],[r,g,b]) => [ar+r, ag+g, ab+b], [0,0,0])
-      .map(v => Math.round(v / samples.length));
-
-    // Усиливаем насыщенность: тянем к максимальному каналу
-    const max = Math.max(...avg);
-    const boosted = avg.map(v => Math.min(255, Math.round(v + (max - v) * 0.5)));
-    const darkened = boosted.map(v => Math.round(v * 0.55));
-
-    const toHex = ([r,g,b]) => '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
-    return { main: toHex(boosted), dark: toHex(darkened) };
+    const hue = bestIdx / 36; // 0..1
+    // main: яркий насыщенный цвет нужного оттенка
+    // dark: тот же оттенок, но темнее — для градиента и углов QR
+    return {
+      main: hslToHex(hue, 0.9, 0.52),
+      dark: hslToHex(hue, 0.95, 0.28),
+    };
   }
 
   async function buildQr(link, avatarUrl) {
