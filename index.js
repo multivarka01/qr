@@ -95,12 +95,13 @@ let qrBusy = false;
 async function processQrQueue(channel) {
   if (qrBusy || qrQueue.length === 0) return;
   qrBusy = true;
-  const { tags, link } = qrQueue.shift();
+  const { tags, link, displaySeconds } = qrQueue.shift();
   try {
     const preview = await getTelegramPreview(link);
     broadcastToOverlay({
       type: "show_qr",
-      displaySeconds: DISPLAY_SECONDS,
+      // null = показывать бесконечно (до !qr off)
+      displaySeconds: displaySeconds ?? null,
       data: { ...preview, link: preview.postUrl },
     });
     if (preview.isFallback) {
@@ -156,24 +157,35 @@ tmiClient.on("message", async (channel, tags, message, self) => {
   // чтобы сломанные ссылки не долбили Telegram без ограничений
   lastTriggerAt = now;
 
-  const link = trimmed.slice(3).trim();
+  const args = trimmed.slice(3).trim();
 
-  if (!link) {
-    // !qr без ссылки — показываем последний запомненный пресет
+  // !qr off — скрыть оверлей
+  if (args.toLowerCase() === 'off') {
+    broadcastToOverlay({ type: 'hide_qr' });
+    return;
+  }
+
+  // Парсим необязательное число секунд в конце: "ссылка 30" или просто "30"
+  const secMatch = args.match(/(?:^|\s)(\d+)$/);
+  const displaySeconds = secMatch ? parseInt(secMatch[1], 10) : null; // null = бесконечно
+  const rest = secMatch ? args.slice(0, args.length - secMatch[0].length).trim() : args;
+
+  if (!rest) {
+    // !qr [секунды] — показываем пресет
     if (!lastQrLink) {
       tmiClient.say(channel, "@" + tags["display-name"] + " использование: !qr <ссылка на t.me>");
       return;
     }
     if (qrQueue.length >= QR_QUEUE_MAX) return;
-    qrQueue.push({ tags, link: lastQrLink });
+    qrQueue.push({ tags, link: lastQrLink, displaySeconds });
     processQrQueue(channel);
     return;
   }
 
-  // !qr <ссылка> — запоминаем новый пресет и показываем
-  lastQrLink = link;
+  // !qr <ссылка> [секунды] — новый пресет
+  lastQrLink = rest;
 
   if (qrQueue.length >= QR_QUEUE_MAX) return;
-  qrQueue.push({ tags, link });
+  qrQueue.push({ tags, link: rest, displaySeconds });
   processQrQueue(channel);
 });

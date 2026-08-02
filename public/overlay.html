@@ -497,7 +497,8 @@
     ws.onmessage = (ev) => {
       try {
         const msg = JSON.parse(ev.data);
-        if (msg.type === 'show_qr') showOverlay(msg.data, msg.displaySeconds || 12);
+        if (msg.type === 'show_qr') showOverlay(msg.data, msg.displaySeconds ?? null);
+        if (msg.type === 'hide_qr')  hideOverlay();
       } catch (e) { console.error(e); }
     };
     ws.onclose = () => setTimeout(connect, 2000);
@@ -799,21 +800,33 @@
       const scrollEl = document.getElementById('post-scroll');
       const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
       const START_DELAY = 1300;
-      const END_PAUSE   = 1900;
       const PX_PER_MS   = 1 / 22;
-      let totalMs = displaySeconds * 1000;
+      const END_PAUSE   = 1900;
+
       if (maxScroll > 4) {
         const scrollMs = Math.min(Math.max(maxScroll / PX_PER_MS, 2200), 9000);
         startAutoScroll(scrollEl, { startDelayMs: START_DELAY, scrollMs });
-        totalMs = Math.max(totalMs, START_DELAY + scrollMs + END_PAUSE);
       }
-      hideTimer = setTimeout(() => {
-        phoneFrame.classList.remove('swaying');
-        qrSideEl.classList.remove('swaying');
-        wrap.classList.add('leaving');
-        wrap.classList.remove('visible');
-      }, totalMs);
+
+      // displaySeconds === null → показываем бесконечно (до !qr off)
+      if (displaySeconds !== null && displaySeconds > 0) {
+        const scrollMs = maxScroll > 4
+          ? Math.min(Math.max(maxScroll / PX_PER_MS, 2200), 9000)
+          : 0;
+        const totalMs = Math.max(displaySeconds * 1000, START_DELAY + scrollMs + END_PAUSE);
+        hideTimer = setTimeout(hideOverlay, totalMs);
+      }
     });
+  }
+
+  function hideOverlay() {
+    if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
+    if (swayTimer) { clearTimeout(swayTimer); swayTimer = null; }
+    if (scrollAnimId) { cancelAnimationFrame(scrollAnimId); scrollAnimId = null; }
+    phoneFrame.classList.remove('swaying');
+    qrSideEl.classList.remove('swaying');
+    wrap.classList.add('leaving');
+    wrap.classList.remove('visible');
   }
 </script>
 </body>
