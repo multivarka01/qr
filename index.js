@@ -157,17 +157,23 @@ tmiClient.on("message", async (channel, tags, message, self) => {
   lastTriggerAt = now;
 
   const link = trimmed.slice(3).trim();
+
   if (!link) {
-    tmiClient.say(
-      channel,
-      "@" + tags["display-name"] + " использование: !qr <ссылка на t.me>",
-    );
+    // !qr без ссылки — показываем последний запомненный пресет
+    if (!lastQrLink) {
+      tmiClient.say(channel, "@" + tags["display-name"] + " использование: !qr <ссылка на t.me>");
+      return;
+    }
+    if (qrQueue.length >= QR_QUEUE_MAX) return;
+    qrQueue.push({ tags, link: lastQrLink });
+    processQrQueue(channel);
     return;
   }
 
-  if (qrQueue.length >= QR_QUEUE_MAX) {
-    return; // очередь переполнена — молча игнорируем
-  }
+  // !qr <ссылка> — запоминаем новый пресет и показываем
+  lastQrLink = link;
+
+  if (qrQueue.length >= QR_QUEUE_MAX) return;
   qrQueue.push({ tags, link });
   processQrQueue(channel);
 });
