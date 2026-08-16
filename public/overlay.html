@@ -21,7 +21,7 @@
     align-items: flex-end;
     justify-content: center;
     gap: 24px;
-    padding-bottom: 52px;
+    padding-bottom: 0;
     pointer-events: none;
   }
 
@@ -30,12 +30,10 @@
     align-items: flex-end;
     gap: 24px;
     opacity: 0;
-    transform: translateY(80px) scale(.96);
-    transition: opacity .5s cubic-bezier(.25,.8,.25,1),
-                transform .5s cubic-bezier(.25,.8,.25,1);
+    transition: opacity .5s cubic-bezier(.25,.8,.25,1);
   }
-  .wrap.visible { opacity: 1; transform: translateY(0) scale(1); }
-  .wrap.leaving { opacity: 0; transform: translateY(60px) scale(.96); transition-duration: .4s; }
+  .wrap.visible { opacity: 1; }
+  .wrap.leaving { opacity: 0; transition-duration: .4s; }
 
   @keyframes swayL {
     0%,100% { transform: rotate(-0.45deg) translateY(0px); }
@@ -55,7 +53,7 @@
   .phone-frame {
     /* Фиксированный размер — длинный пост не ломает макет */
     width: 300px;
-    height: 520px;
+    height: 615px;
     border-radius: 22px;
     overflow: hidden;
     /* Многослойная тень как у iOS-карточек */
@@ -68,12 +66,14 @@
     display: flex;
     flex-direction: column;
 
+    /* Стартует за нижним краем экрана целиком, а не просто чуть ниже своего места */
     opacity: 0;
-    transform: translateY(100px);
+    transform: translateY(100vh);
     transition: opacity .55s cubic-bezier(.16,.8,.2,1) .04s,
                 transform .55s cubic-bezier(.16,.8,.2,1) .04s;
   }
   .wrap.visible .phone-frame { opacity: 1; transform: translateY(0); }
+  .wrap.leaving .phone-frame { transform: translateY(100vh); transition-duration: .4s; }
 
   /* ---------- ШАПКА — frosted glass ---------- */
   .tg-topbar {
@@ -155,6 +155,27 @@
     overflow-y: auto;
     overflow-x: hidden;
     padding: 8px 0 4px;
+    transition: opacity .25s ease;
+  }
+  .post-scroll.post-fading { opacity: 0; }
+
+  /* Точки-индикатор текущего поста из последних N (показывается только если постов больше одного) */
+  .tg-post-dots {
+    display: none;
+    justify-content: center;
+    gap: 5px;
+    padding: 7px 0 2px;
+  }
+  .tg-post-dots.active { display: flex; }
+  .tg-post-dots span {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.25);
+    transition: background .25s ease, transform .25s ease;
+  }
+  .tg-post-dots span.current {
+    background: #0A84FF;
+    transform: scale(1.3);
   }
 
   /* Когда пост — только фото без текста: растягиваем пузырёк на всю высоту */
@@ -183,27 +204,51 @@
     display: none;
     align-items: center;
     gap: 8px;
-    background: rgba(255,255,255,.04);
-    padding: 6px 12px;
+    background: rgba(255,255,255,.05);
+    padding: 5px 12px;
     margin-bottom: 4px;
     border-bottom: 0.5px solid rgba(255,255,255,.06);
   }
   .tg-pinned.active { display: flex; }
   .tg-pinned-line {
-    width: 2px; height: 26px;
+    width: 2px; height: 28px;
     background: #0A84FF;
     border-radius: 2px;
     flex-shrink: 0;
   }
-  .tg-pinned-texts { min-width: 0; }
-  .tg-pinned-label {
-    font-size: 11px; font-weight: 600;
-    color: #0A84FF; margin-bottom: 1px;
+  /* Миниатюра закреплённого поста — показывается только если у поста есть фото */
+  .tg-pinned-thumb {
+    display: none;
+    width: 32px; height: 32px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
   }
-  .tg-pinned-text {
-    font-size: 11px; color: rgba(255,255,255,.4);
+  .tg-pinned-thumb.active { display: block; }
+  .tg-pinned-texts { min-width: 0; flex: 1; }
+  .tg-pinned-label {
+    font-size: 12px; font-weight: 600;
+    color: #0A84FF; margin-bottom: 1px;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
+  .tg-pinned-text {
+    font-size: 12px; color: rgba(255,255,255,.45);
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  /* Кнопка-пилюля справа (например «Участвовать (3)» для розыгрышей) */
+  .tg-pinned-action {
+    display: none;
+    flex-shrink: 0;
+    background: #0A84FF;
+    color: #FFFFFF;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 999px;
+    white-space: nowrap;
+    letter-spacing: -0.1px;
+  }
+  .tg-pinned-action.active { display: block; }
 
   /* Пузырёк сообщения */
   .tg-message {
@@ -315,6 +360,14 @@
   }
   .tg-avatar-row span:first-child { margin-left: 0; }
 
+  /* Иконка комментариев — как в настоящем Telegram, когда список
+     комментаторов ещё пуст/неизвестен (речевой пузырь) */
+  .tg-comment-icon {
+    width: 20px; height: 20px;
+    flex-shrink: 0;
+    color: #0A84FF;
+  }
+
   .tg-comment-label {
     font-size: 13px;
     font-weight: 500;
@@ -336,12 +389,14 @@
     flex-direction: column;
     align-items: center;
     gap: 14px;
+    margin-bottom: 40px;
     opacity: 0;
-    transform: translateY(20px) scale(.93);
+    transform: translateY(100vh) scale(.93);
     transition: opacity .5s ease .1s,
                 transform .5s cubic-bezier(.2,.85,.25,1.1) .1s;
   }
   .wrap.visible .qr-side { opacity: 1; transform: translateY(0) scale(1); }
+  .wrap.leaving .qr-side { transform: translateY(100vh) scale(.93); transition: opacity .4s ease, transform .4s ease; }
 
   .qr-glow-wrap {
     position: relative;
@@ -432,11 +487,13 @@
         <div class="post-scroll" id="post-scroll">
 
           <div class="tg-pinned" id="pinned-box">
-            <div class="tg-pinned-line"></div>
+            <div class="tg-pinned-line" id="pinned-line"></div>
+            <img class="tg-pinned-thumb" id="pinned-thumb" src="" alt="" />
             <div class="tg-pinned-texts">
               <div class="tg-pinned-label">Закреплённое сообщение</div>
               <div class="tg-pinned-text" id="pinned-text"></div>
             </div>
+            <div class="tg-pinned-action" id="pinned-action"></div>
           </div>
 
           <div class="tg-message">
@@ -453,13 +510,18 @@
         </div>
       </div>
 
+      <div class="tg-post-dots" id="post-dots"></div>
+
       <div class="tg-footer">
         <div class="tg-footer-left">
-          <div class="tg-avatar-row" id="comment-avatars">
+          <div class="tg-avatar-row" id="comment-avatars" style="display:none">
             <span style="background:#FF453A"></span>
             <span style="background:#30D158"></span>
             <span style="background:#0A84FF"></span>
           </div>
+          <svg class="tg-comment-icon" id="comment-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M12 3C7.03 3 3 6.58 3 11c0 2.49 1.28 4.71 3.3 6.19-.1.99-.5 2.44-1.55 3.9 1.95-.24 3.5-1.02 4.6-1.77.85.24 1.75.37 2.65.37 4.97 0 9-3.58 9-8s-4.03-8-9-8z" fill="currentColor"/>
+          </svg>
           <span class="tg-comment-label" id="comment-label">Прокомментировать</span>
         </div>
         <span class="tg-footer-chevron">›</span>
@@ -491,6 +553,9 @@
   const phoneFrame = document.getElementById('phone-frame');
   const qrSideEl   = document.getElementById('qr-side-el');
   let hideTimer = null, swayTimer = null, scrollAnimId = null;
+  let rotateTimer = null, rotateFadeTimer = null;
+  let currentPosts = [], currentPostIndex = 0;
+  const ROTATE_MS = 6000; // как часто меняется пост при показе «последних постов»
 
   function connect() {
     const ws = new WebSocket(WS_URL);
@@ -506,23 +571,54 @@
   connect();
 
   // ?demo — предпросмотр без команды
-  if (new URLSearchParams(location.search).has('demo')) {
-    setTimeout(() => showOverlay({
+  // ?demo=multi — предпросмотр цикла из нескольких последних постов
+  const demoParam = new URLSearchParams(location.search).get('demo');
+  if (demoParam !== null) {
+    const baseChannel = {
       channelUsername: 'nebudetgg',
       channelTitle: 'Руслан Кубик',
       subscriberCount: '74 603 подписчика',
-      postId: '6319',
       avatarDataUri: null, avatarUrl: null,
-      photos: ['https://placehold.co/300x180/1c1c1e/ffffff?text=фото+поста'],
-      text: 'Правительство Британии заявило, что 90% населения поддержало доступ в интернет по паспорту для защиты детей, но есть нюанс 🙂',
-      views: '895',
-      dateTime: new Date().toISOString(),
-      reactions: [
-        { emoji: '😊', count: 21 }, { emoji: '❤️', count: 10 },
-        { emoji: '😮', count: 6  }, { emoji: '😢', count: 3  },
-        { emoji: '🤔', count: 2  }, { emoji: '👍', count: 2  },
-      ],
       isFallback: false,
+    };
+    const demoPostsMulti = [
+      {
+        postId: '6319',
+        pinned: {
+          text: '🎁 ЛЕГЕНДАРНЫЙ розыгрыш от нас!',
+          thumbUrl: 'https://placehold.co/64x64/2c2c2e/ffffff?text=%F0%9F%8E%81',
+          actionLabel: 'Участвовать (3)',
+        },
+        photos: ['https://placehold.co/300x180/1c1c1e/ffffff?text=фото+поста'],
+        text: 'Правительство Британии заявило, что 90% населения поддержало доступ в интернет по паспорту для защиты детей, но есть нюанс 🙂',
+        views: '895',
+        dateTime: new Date().toISOString(),
+        reactions: [
+          { emoji: '😊', count: 21 }, { emoji: '❤️', count: 10 },
+          { emoji: '😮', count: 6  }, { emoji: '😢', count: 3  },
+          { emoji: '🤔', count: 2  }, { emoji: '👍', count: 2  },
+        ],
+      },
+      {
+        postId: '6318',
+        photos: [],
+        text: 'Через 10 минут начинаем стрим, не проспите ⏰',
+        views: '612',
+        dateTime: new Date(Date.now() - 3600e3).toISOString(),
+        reactions: [{ emoji: '🔥', count: 14 }, { emoji: '❤️', count: 5 }],
+      },
+      {
+        postId: '6317',
+        photos: ['https://placehold.co/300x180/1c1c1e/ffffff?text=клип+дня'],
+        text: 'Клип дня — досмотрите до конца 😂',
+        views: '2 130',
+        dateTime: new Date(Date.now() - 7200e3).toISOString(),
+        reactions: [{ emoji: '😂', count: 40 }, { emoji: '👍', count: 12 }],
+      },
+    ];
+    setTimeout(() => showOverlay({
+      ...baseChannel,
+      posts: demoParam === 'multi' ? demoPostsMulti : [demoPostsMulti[0]],
     }, 9999), 300);
   }
 
@@ -689,12 +785,10 @@
   }
 
   function showOverlay(data, displaySeconds) {
-    if (scrollAnimId) cancelAnimationFrame(scrollAnimId);
-    document.getElementById('post-scroll').scrollTop = 0;
+    if (rotateTimer) { clearTimeout(rotateTimer); rotateTimer = null; }
+    if (rotateFadeTimer) { clearTimeout(rotateFadeTimer); rotateFadeTimer = null; }
 
-    const hasPost = Boolean(data.postId);
-
-    // Аватар
+    // Шапка канала — общая для всех постов, выставляется один раз
     const avatarEl = document.getElementById('post-avatar');
     if (data.avatarDataUri || data.avatarUrl) {
       avatarEl.src = data.avatarDataUri || data.avatarUrl;
@@ -703,11 +797,77 @@
       avatarEl.removeAttribute('src');
       avatarEl.style.display = 'none';
     }
-
-    // Шапка
     document.getElementById('post-channel-name').textContent = data.channelTitle || data.channelUsername || '';
     document.getElementById('post-channel-sub').textContent  = data.subscriberCount || 'Telegram канал';
+
+    // QR — тоже общий для канала, не зависит от того, какой пост сейчас на экране
+    document.getElementById('qr-username').textContent = '@' + data.channelUsername;
+    buildQr(`https://t.me/${data.channelUsername}`, data.avatarDataUri || data.avatarUrl);
+
+    // Список постов для показа: несколько последних (цикл) либо один конкретный.
+    // Поддерживаем и старый формат (данные поста прямо в data), и новый data.posts[].
+    currentPosts = Array.isArray(data.posts) && data.posts.length > 0
+      ? data.posts
+      : [{ postId: data.postId, photos: data.photos, text: data.text, views: data.views,
+           dateTime: data.dateTime, reactions: data.reactions, pinned: data.pinned,
+           fallbackReason: data.fallbackReason }];
+    currentPostIndex = 0;
+
+    // Точки-индикатор показываем только когда постов реально несколько
+    const dotsEl = document.getElementById('post-dots');
+    dotsEl.classList.toggle('active', currentPosts.length > 1);
+
+    renderPost(currentPosts[0], { immediate: true });
+
+    // Показать
+    if (hideTimer) clearTimeout(hideTimer);
+    if (swayTimer) clearTimeout(swayTimer);
+    phoneFrame.classList.remove('swaying');
+    qrSideEl.classList.remove('swaying');
+    wrap.classList.remove('leaving');
+    requestAnimationFrame(() => wrap.classList.add('visible'));
+
+    swayTimer = setTimeout(() => {
+      phoneFrame.classList.add('swaying');
+      qrSideEl.classList.add('swaying');
+    }, 560);
+
+    // Если постов несколько — переключаем их по кругу, пока карточка на экране
+    if (currentPosts.length > 1) {
+      scheduleNextRotation();
+    }
+
+    // displaySeconds === null → показываем бесконечно (до !qr off)
+    if (displaySeconds !== null && displaySeconds > 0) {
+      hideTimer = setTimeout(hideOverlay, displaySeconds * 1000);
+    }
+  }
+
+  function scheduleNextRotation() {
+    if (rotateTimer) clearTimeout(rotateTimer);
+    rotateTimer = setTimeout(() => {
+      currentPostIndex = (currentPostIndex + 1) % currentPosts.length;
+      const scrollEl = document.getElementById('post-scroll');
+      scrollEl.classList.add('post-fading');
+      rotateFadeTimer = setTimeout(() => {
+        renderPost(currentPosts[currentPostIndex], { immediate: false });
+        scrollEl.classList.remove('post-fading');
+        scheduleNextRotation();
+      }, 260);
+    }, ROTATE_MS);
+  }
+
+  // Отрисовывает ОДИН пост в теле карточки (вызывается и при первом показе, и при ротации)
+  function renderPost(data, { immediate }) {
+    if (scrollAnimId) cancelAnimationFrame(scrollAnimId);
+    const hasPost = Boolean(data.postId);
+
     document.getElementById('tg-back-count').textContent = data.postId || '';
+
+    // Точки-индикатор: подсвечиваем текущий
+    const dotsEl = document.getElementById('post-dots');
+    dotsEl.innerHTML = currentPosts.map((_, i) =>
+      `<span class="${i === currentPostIndex ? 'current' : ''}"></span>`).join('');
 
     // Фото
     const photosEl = document.getElementById('photos');
@@ -775,46 +935,52 @@
       reactionsEl.appendChild(pill);
     });
 
+    // Закреплённое сообщение (если данные переданы отдельным полем pinned)
+    const pinnedBox = document.getElementById('pinned-box');
+    const pinned = data.pinned || null;
+    if (pinned && (pinned.text || pinned.thumbUrl)) {
+      pinnedBox.classList.add('active');
+      document.getElementById('pinned-text').textContent = pinned.text || '';
+      const thumbEl = document.getElementById('pinned-thumb');
+      const lineEl = document.getElementById('pinned-line');
+      if (pinned.thumbUrl) {
+        thumbEl.src = pinned.thumbUrl;
+        thumbEl.classList.add('active');
+        lineEl.style.display = 'none';
+      } else {
+        thumbEl.classList.remove('active');
+        lineEl.style.display = '';
+      }
+      const actionEl = document.getElementById('pinned-action');
+      if (pinned.actionLabel) {
+        actionEl.textContent = pinned.actionLabel;
+        actionEl.classList.add('active');
+      } else {
+        actionEl.classList.remove('active');
+      }
+    } else {
+      pinnedBox.classList.remove('active');
+    }
+
     // Нижняя панель
     document.getElementById('comment-label').textContent = hasPost ? 'Прокомментировать' : 'Открыть канал';
-    document.getElementById('comment-avatars').style.display = hasPost ? '' : 'none';
+    // Показываем кружки-аватарки только если реально передан список комментаторов,
+    // иначе (как в настоящем Telegram при отсутствии данных) — иконка речевого пузыря
+    const hasCommentAvatars = Array.isArray(data.commentAvatars) && data.commentAvatars.length > 0;
+    document.getElementById('comment-avatars').style.display = hasCommentAvatars ? 'flex' : 'none';
+    document.getElementById('comment-icon').style.display = hasCommentAvatars ? 'none' : (hasPost ? '' : 'none');
 
-    // QR
-    document.getElementById('qr-username').textContent = '@' + data.channelUsername;
-    buildQr(`https://t.me/${data.channelUsername}`, data.avatarDataUri || data.avatarUrl);
-
-    // Показать
-    if (hideTimer) clearTimeout(hideTimer);
-    if (swayTimer) clearTimeout(swayTimer);
-    phoneFrame.classList.remove('swaying');
-    qrSideEl.classList.remove('swaying');
-    wrap.classList.remove('leaving');
-    requestAnimationFrame(() => wrap.classList.add('visible'));
-
-    swayTimer = setTimeout(() => {
-      phoneFrame.classList.add('swaying');
-      qrSideEl.classList.add('swaying');
-    }, 560);
+    const scrollEl = document.getElementById('post-scroll');
+    scrollEl.scrollTop = 0;
 
     requestAnimationFrame(() => {
-      const scrollEl = document.getElementById('post-scroll');
       const maxScroll = scrollEl.scrollHeight - scrollEl.clientHeight;
-      const START_DELAY = 1300;
+      const START_DELAY = immediate ? 1300 : 300;
       const PX_PER_MS   = 1 / 22;
-      const END_PAUSE   = 1900;
 
       if (maxScroll > 4) {
         const scrollMs = Math.min(Math.max(maxScroll / PX_PER_MS, 2200), 9000);
         startAutoScroll(scrollEl, { startDelayMs: START_DELAY, scrollMs });
-      }
-
-      // displaySeconds === null → показываем бесконечно (до !qr off)
-      if (displaySeconds !== null && displaySeconds > 0) {
-        const scrollMs = maxScroll > 4
-          ? Math.min(Math.max(maxScroll / PX_PER_MS, 2200), 9000)
-          : 0;
-        const totalMs = Math.max(displaySeconds * 1000, START_DELAY + scrollMs + END_PAUSE);
-        hideTimer = setTimeout(hideOverlay, totalMs);
       }
     });
   }
@@ -822,6 +988,8 @@
   function hideOverlay() {
     if (hideTimer) { clearTimeout(hideTimer); hideTimer = null; }
     if (swayTimer) { clearTimeout(swayTimer); swayTimer = null; }
+    if (rotateTimer) { clearTimeout(rotateTimer); rotateTimer = null; }
+    if (rotateFadeTimer) { clearTimeout(rotateFadeTimer); rotateFadeTimer = null; }
     if (scrollAnimId) { cancelAnimationFrame(scrollAnimId); scrollAnimId = null; }
     phoneFrame.classList.remove('swaying');
     qrSideEl.classList.remove('swaying');
