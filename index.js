@@ -6,7 +6,7 @@ const express = require("express");
 const { WebSocketServer } = require("ws");
 const tmi = require("tmi.js");
 
-const { getTelegramPreview } = require("./lib/telegram");
+const { getTelegramPreviews } = require("./lib/telegram");
 
 // ---------- Startup validation ----------
 
@@ -34,6 +34,9 @@ const DISPLAY_SECONDS = parseInt(
   process.env.OVERLAY_DISPLAY_SECONDS || "12",
   10,
 );
+// Сколько последних постов канала показывать по кругу, если !qr вызван
+// со ссылкой просто на канал (без конкретного id поста)
+const RECENT_POSTS_LIMIT = parseInt(process.env.QR_RECENT_POSTS_LIMIT || "5", 10);
 
 // ---------- HTTP + WebSocket сервер (для OBS Browser Source) ----------
 
@@ -97,21 +100,41 @@ async function processQrQueue(channel) {
   qrBusy = true;
   const { tags, link, displaySeconds } = qrQueue.shift();
   try {
-    const preview = await getTelegramPreview(link);
+    const previews = await getTelegramPreviews(link, { limit: RECENT_POSTS_LIMIT });
+    const first = previews[0];
     broadcastToOverlay({
       type: "show_qr",
       // null = показывать бесконечно (до !qr off)
       displaySeconds: displaySeconds ?? null,
-      data: { ...preview, link: preview.postUrl },
+      data: {
+        // поля канала — общие для всех постов, оверлей берёт их один раз
+        channelUsername: first.channelUsername,
+        channelTitle: first.channelTitle,
+        subscriberCount: first.subscriberCount,
+        avatarUrl: first.avatarUrl,
+        avatarDataUri: first.avatarDataUri,
+        isFallback: first.isFallback,
+        // сами посты — оверлей покажет их по очереди, если их больше одного
+        posts: previews.map((p) => ({
+          postId: p.postId,
+          photos: p.photos,
+          text: p.text,
+          views: p.views,
+          dateTime: p.dateTime,
+          reactions: p.reactions,
+          fallbackReason: p.fallbackReason,
+        })),
+        link: first.postUrl,
+      },
     });
-    if (preview.isFallback) {
+    if (first.isFallback) {
       tmiClient.say(
         channel,
-        `@${tags["display-name"]} показал только QR — не нашёл последний пост (${preview.fallbackReason})`,
+        `@${tags["display-name"]} показал только QR — не нашёл последние посты (${first.fallbackReason})`,
       );
     }
     console.log(
-      `[twitch] !qr вызван пользователем ${tags["display-name"]}: ${link}`,
+      `[twitch] !qr вызван пользователем ${tags["display-name"]}: ${link} (постов: ${previews.length})`,
     );
   } catch (err) {
     console.error("[twitch] Ошибка обработки !qr:", err.message);
