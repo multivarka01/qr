@@ -114,6 +114,7 @@ async function processQrQueue(channel) {
         avatarUrl: first.avatarUrl,
         avatarDataUri: first.avatarDataUri,
         isFallback: first.isFallback,
+        verified: first.verified,
         // сами посты — оверлей покажет их по очереди, если их больше одного
         posts: previews.map((p) => ({
           postId: p.postId,
@@ -122,6 +123,7 @@ async function processQrQueue(channel) {
           views: p.views,
           dateTime: p.dateTime,
           reactions: p.reactions,
+          comments: p.comments,
           fallbackReason: p.fallbackReason,
         })),
         link: first.postUrl,
