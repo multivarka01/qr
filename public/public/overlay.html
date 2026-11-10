@@ -1,0 +1,163 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><title>TG QR Overlay</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{width:100%;height:100%;background:transparent;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#fff}
+:root{--accent:#e11d2e;--dark:#7a0d17}
+#stage{position:fixed;inset:0;display:flex;align-items:center;justify-content:center}
+.wrap{display:flex;align-items:center;gap:70px;opacity:0;transition:opacity .5s}
+.wrap.visible{opacity:1}.wrap.leaving{opacity:0;transition-duration:.4s}
+@keyframes swayL{0%,100%{transform:rotate(-.4deg) translateY(0)}50%{transform:rotate(.4deg) translateY(-5px)}}
+@keyframes swayR{0%,100%{transform:rotate(.4deg) translateY(-3px)}50%{transform:rotate(-.4deg) translateY(2px)}}
+.swaying.feed-col{animation:swayL 6.5s ease-in-out infinite}
+.swaying.qr-side{animation:swayR 7.2s ease-in-out infinite}
+.feed-col,.qr-side{opacity:0;transform:translateY(100vh);transition:transform .6s cubic-bezier(.16,.8,.2,1),opacity .5s}
+.qr-side{transition-delay:.1s}
+.wrap.visible .feed-col,.wrap.visible .qr-side{opacity:1;transform:none}
+.wrap.leaving .feed-col,.wrap.leaving .qr-side{transform:translateY(100vh);transition-duration:.4s;transition-delay:0s}
+
+/* ---------- лента Telegram ---------- */
+.feed-col{position:relative;width:390px;height:640px}
+.feed-col::before{content:"";position:absolute;inset:-16px;z-index:0;border-radius:36px;
+background:radial-gradient(120% 60% at 20% 0%,rgba(255,255,255,.22),transparent 55%),radial-gradient(90% 50% at 100% 100%,rgba(255,255,255,.10),transparent 60%),rgba(22,30,44,.62);
+backdrop-filter:blur(30px) saturate(190%) brightness(1.1);-webkit-backdrop-filter:blur(30px) saturate(190%) brightness(1.1);
+border:1px solid rgba(255,255,255,.2);
+box-shadow:inset 0 1.5px 1px rgba(255,255,255,.45),inset 0 -1px 2px rgba(255,255,255,.12),inset 0 0 40px rgba(255,255,255,.04),0 24px 60px rgba(0,0,0,.5)}
+.topbar{position:absolute;top:0;left:0;right:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:10px}
+.pill{background:linear-gradient(180deg,rgba(255,255,255,.16),rgba(255,255,255,.05)),rgba(32,42,56,.6);box-shadow:inset 0 1px 1px rgba(255,255,255,.35),0 6px 20px rgba(0,0,0,.35);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%);border:1px solid rgba(255,255,255,.14);border-radius:999px}
+.back{height:44px;padding:0 16px 0 12px;display:flex;align-items:center;gap:6px;font-size:18px;font-weight:600}
+.back svg{width:10px;height:18px}
+.title{height:50px;padding:0 24px;display:flex;flex-direction:column;align-items:center;justify-content:center;min-width:0}
+.title b{font-size:17px;font-weight:700;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.title b span{overflow:hidden;text-overflow:ellipsis;max-width:200px}
+.title small{font-size:13px;color:rgba(255,255,255,.55);margin-top:1px}
+.verified{width:16px;height:16px;flex:none}
+.tg-avatar{width:50px;height:50px;border-radius:50%;object-fit:cover;background:#3a3a3c;flex:none;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.feed{z-index:1;position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;padding:70px 0 40px;-webkit-mask-image:linear-gradient(#000 88%,transparent);mask-image:linear-gradient(#000 88%,transparent)}
+.feed::-webkit-scrollbar{width:0}
+.msg{background:rgba(38,52,72,.72);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border:1px solid rgba(255,255,255,.05);border-radius:20px;margin-bottom:14px;overflow:hidden;box-shadow:0 6px 18px rgba(0,0,0,.3)}
+.msg img.ph{display:block;width:100%;max-height:260px;object-fit:cover}
+.txt{padding:12px 14px 4px;font-size:17px;line-height:1.35;white-space:pre-wrap;word-break:break-word}
+.rx{display:flex;flex-wrap:wrap;gap:6px;padding:8px 12px 2px}
+.r{display:inline-flex;align-items:center;gap:5px;background:rgba(255,255,255,.1);border-radius:999px;padding:4px 10px;font-size:14px;font-weight:600}
+.r i{font-style:normal;font-size:15px}
+.meta{display:flex;justify-content:flex-end;align-items:center;gap:6px;padding:4px 14px 8px;font-size:13px;color:rgba(255,255,255,.5)}
+.meta svg{width:15px;height:15px;opacity:.7}
+.cm{display:flex;align-items:center;justify-content:space-between;padding:9px 14px;border-top:1px solid rgba(255,255,255,.08);color:#6ab3f3;font-size:15px;font-weight:500}
+.cm .l{display:flex;align-items:center;gap:8px}
+.av{display:flex}.av span{width:22px;height:22px;border-radius:50%;border:2px solid #263448;margin-left:-7px}
+.av span:first-child{margin-left:0}
+.cm .ch{color:rgba(255,255,255,.35);font-size:20px}
+
+/* ---------- QR ---------- */
+.qr-side{display:flex;flex-direction:column;align-items:center;gap:26px}
+.qr-glow{position:relative;width:420px;height:420px}
+.qr-glow::before{content:"";position:absolute;inset:-28px;border-radius:70px;background:var(--accent);filter:blur(44px);opacity:.62;animation:pulse 3s ease-in-out infinite}
+@keyframes pulse{50%{opacity:.9;transform:scale(1.04)}}
+.qr-card{position:relative;width:100%;height:100%;background:#fff;border-radius:40px;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.35)}
+#qr-target,#qr-target svg{width:100%!important;height:100%!important;display:block}
+.qr-name{padding:14px 40px;font-size:30px;font-weight:800;letter-spacing:-.02em;background:rgba(36,38,46,.82)}
+</style></head><body>
+<div id="stage"><div class="wrap" id="wrap">
+  <div class="feed-col" id="feed-col">
+    <div class="topbar">
+      <div class="pill back"><svg viewBox="0 0 10 18" fill="none"><path d="M9 1 1 9l8 8" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="back"></span></div>
+      <div class="pill title"><b><span id="name"></span><svg class="verified" id="ver" viewBox="0 0 24 24"><circle cx="12" cy="12" r="12" fill="#3b9cf5"/><path d="m6.8 12.4 3.4 3.4 7-7.2" stroke="#fff" stroke-width="2.6" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></b><small id="subs"></small></div>
+      <img class="tg-avatar" id="avatar" alt="">
+    </div>
+    <div class="feed" id="feed"></div>
+  </div>
+  <div class="qr-side" id="qr-side">
+    <div class="qr-glow"><div class="qr-card"><div id="qr-target"></div></div></div>
+    <div class="pill qr-name" id="qr-name"></div>
+  </div>
+</div></div>
+<script src="/qr-code-styling.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const wrap=$('wrap'),feedCol=$('feed-col'),qrSide=$('qr-side'),feed=$('feed');
+let hideTimer,swayTimer,scrollId,gen=0;
+
+function connect(){const ws=new WebSocket(`${location.protocol==='https:'?'wss':'ws'}://${location.host}/ws`);
+  ws.onmessage=e=>{try{const m=JSON.parse(e.data);if(m.type==='show_qr')show(m.data,m.displaySeconds??null);if(m.type==='hide_qr')hide()}catch(x){console.error(x)}};
+  ws.onclose=()=>setTimeout(connect,2000)}
+connect();
+
+const esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const plural=(n,a,b,c)=>{const m=n%100,k=n%10;return m>10&&m<15?c:k===1?a:k>1&&k<5?b:c};
+const fmt=n=>n>=1000?(n/1000).toFixed(2).replace(/0$/,'')+'K':n;
+const time=iso=>{const d=new Date(iso);return isNaN(d)?'':d.toLocaleTimeString('ru-RU',{hour:'2-digit',minute:'2-digit'})};
+const EYE='<svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><path d="M1.5 12S5.5 5 12 5s10.5 7 10.5 7-4 7-10.5 7S1.5 12 1.5 12z"/><circle cx="12" cy="12" r="3" fill="#fff"/></svg>';
+
+function bubble(p){
+  const ph=(p.photos||[]).slice(0,1).map(u=>`<img class="ph" src="${esc(u)}">`).join('');
+  const rx=(p.reactions||[]).length?`<div class="rx">${p.reactions.map(r=>`<div class="r"><i>${esc(r.emoji)}</i>${fmt(r.count)}</div>`).join('')}</div>`:'';
+  const meta=`<div class="meta">${p.views?EYE+esc(p.views):''}<span>${time(p.dateTime)}</span></div>`;
+  const cm=`<div class="cm"><div class="l"><div class="av"><span style="background:#8b7be8"></span><span style="background:#f0a04b"></span><span style="background:#3fc28a"></span></div>${p.comments!=null?`${p.comments} ${plural(p.comments,'комментарий','комментария','комментариев')}`:'Прокомментировать'}</div><span class="ch">›</span></div>`;
+  return `<div class="msg">${ph}${p.text?`<div class="txt">${esc(p.text)}</div>`:''}${rx}${meta}${cm}</div>`;
+}
+
+function autoScroll(){
+  cancelAnimationFrame(scrollId);feed.scrollTop=0;
+  requestAnimationFrame(()=>{const max=feed.scrollHeight-feed.clientHeight;if(max<4)return;
+    const dur=Math.min(Math.max(max*30,3000),14000),t0=performance.now()+1500;
+    const tick=n=>{const p=Math.min(Math.max(n-t0,0)/dur,1);feed.scrollTop=(p<.5?2*p*p:1-Math.pow(-2*p+2,2)/2)*max;if(p<1)scrollId=requestAnimationFrame(tick)};
+    scrollId=requestAnimationFrame(tick)});
+}
+
+/* ---- цвет акцента из аватарки ---- */
+function circle(src){return new Promise(res=>{if(!src)return res(null);const i=new Image();i.crossOrigin='anonymous';
+  i.onload=()=>{const s=Math.min(i.naturalWidth,i.naturalHeight)||256,c=document.createElement('canvas');c.width=c.height=s;const x=c.getContext('2d');
+    x.beginPath();x.arc(s/2,s/2,s/2,0,7);x.clip();x.drawImage(i,(i.naturalWidth-s)/2,(i.naturalHeight-s)/2,s,s,0,0,s,s);
+    try{res(c.toDataURL('image/png'))}catch{res(src)}};i.onerror=()=>res(null);i.src=src})}
+function hsl(r,g,b){r/=255;g/=255;b/=255;const M=Math.max(r,g,b),m=Math.min(r,g,b),l=(M+m)/2;if(M===m)return[0,0,l];const d=M-m,s=l>.5?d/(2-M-m):d/(M+m);
+  const h=(M===r?(g-b)/d+(g<b?6:0):M===g?(b-r)/d+2:(r-g)/d+4)/6;return[h,s,l]}
+const hex=(h,s,l)=>{const a=s*Math.min(l,1-l),f=n=>{const k=(n+h*12)%12;return Math.round(255*(l-a*Math.max(-1,Math.min(k-3,9-k,1)))).toString(16).padStart(2,'0')};return`#${f(0)}${f(8)}${f(4)}`};
+async function colors(src){if(!src)return null;const i=new Image();await new Promise(r=>{i.onload=i.onerror=r;i.src=src});
+  const c=document.createElement('canvas');c.width=c.height=48;const x=c.getContext('2d');try{x.drawImage(i,0,0,48,48);const d=x.getImageData(0,0,48,48).data,b=new Array(36).fill(0);let L=0,n=0;
+  for(let k=0;k<d.length;k+=4){const[h,s,l]=hsl(d[k],d[k+1],d[k+2]);if(d[k+3]>=200){L+=l;n++}if(s<.25||l<.1||l>.9||d[k+3]<200)continue;b[Math.floor(h*36)%36]+=s}
+  const m=Math.max(...b);if(m<n*.04)return{main:'#2b2b31',dark:'#000',glow:L/(n||1)<.5?'#b4bacb':'#fff'};const h=b.indexOf(m)/36;return{main:hex(h,.85,.5),dark:hex(h,.9,.25),glow:hex(h,.9,.5)}}catch{return null}}
+
+async function buildQr(link,avatar){
+  const g=++gen,t=$('qr-target');t.innerHTML='';
+  const av=await circle(avatar);if(g!==gen)return;
+  const c=(await colors(av))||{main:'#e11d2e',dark:'#7a0d17'};
+  document.documentElement.style.setProperty('--accent',c.glow||c.main);
+  new QRCodeStyling({width:380,height:380,type:'svg',data:link,margin:0,qrOptions:{errorCorrectionLevel:'H'},
+    dotsOptions:{type:'rounded',gradient:{type:'linear',rotation:.8,colorStops:[{offset:0,color:c.main},{offset:1,color:c.dark}]}},
+    cornersSquareOptions:{type:'extra-rounded',color:c.dark},cornersDotOptions:{type:'dot',color:c.dark},
+    backgroundOptions:{color:'transparent'},image:av||undefined,
+    imageOptions:{crossOrigin:'anonymous',margin:5,imageSize:.3,hideBackgroundDots:true}}).append(t);
+}
+
+function show(d,sec){
+  clearTimeout(hideTimer);clearTimeout(swayTimer);feedCol.classList.remove('swaying');qrSide.classList.remove('swaying');
+  const img=d.avatarDataUri||d.avatarUrl;
+  if(img){$('avatar').src=img;$('avatar').style.display=''}else $('avatar').style.display='none';
+  $('name').textContent=d.channelTitle||d.channelUsername||'';
+  $('subs').textContent=d.subscriberCount||'Telegram канал';
+  $('ver').style.display=d.verified?'':'none';
+  $('qr-name').textContent='@'+d.channelUsername;
+  buildQr(`https://t.me/${d.channelUsername}`,img);
+  const posts=(Array.isArray(d.posts)&&d.posts.length?d.posts:[d]).slice();
+  $('back').textContent=posts[0].postId||'';
+  // в Telegram старые посты сверху, новые снизу
+  feed.innerHTML=posts.reverse().map(p=>(p.postId||p.text||(p.photos||[]).length)?bubble(p)
+    :`<div class="msg"><div class="txt">${esc(p.fallbackReason?'Не нашёл посты: '+p.fallbackReason:'')}</div></div>`).join('');
+  autoScroll();
+  wrap.classList.remove('leaving');requestAnimationFrame(()=>wrap.classList.add('visible'));
+  swayTimer=setTimeout(()=>{feedCol.classList.add('swaying');qrSide.classList.add('swaying')},650);
+  if(sec>0)hideTimer=setTimeout(hide,sec*1000);
+}
+function hide(){clearTimeout(hideTimer);clearTimeout(swayTimer);cancelAnimationFrame(scrollId);
+  feedCol.classList.remove('swaying');qrSide.classList.remove('swaying');wrap.classList.add('leaving');wrap.classList.remove('visible')}
+
+// ?demo — предпросмотр как на референсе
+if(new URLSearchParams(location.search).has('demo'))setTimeout(()=>show({
+  channelUsername:'nebudetgg',channelTitle:'Логово Внизу',subscriberCount:'487 881 подписчик',verified:true,
+  posts:[
+   {postId:'67',text:'twitch.tv/bratishkinoff',views:'28.1K',dateTime:'2026-01-01T20:21:00',comments:28,reactions:[{emoji:'⭐',count:3},{emoji:'❤️',count:486},{emoji:'👍',count:56},{emoji:'🤡',count:23},{emoji:'💩',count:14},{emoji:'😱',count:5}]},
+   {postId:'66',text:'А ну он это и сделал',views:'59.9K',dateTime:'2026-01-01T15:54:00',comments:77,reactions:[{emoji:'⭐',count:2},{emoji:'❤️',count:1420},{emoji:'🔥',count:153},{emoji:'🤡',count:80},{emoji:'😱',count:24},{emoji:'🖕',count:18}]},
+   {postId:'65',text:'P.s. Может упасть, не тестили',views:'60.5K',dateTime:'2026-01-01T15:54:00',comments:23,reactions:[{emoji:'⭐',count:2},{emoji:'❤️',count:1190},{emoji:'🔥',count:115},{emoji:'👍',count:68},{emoji:'💩',count:31},{emoji:'👎',count:10}]}
+  ]},null),300);
+</script></body></html>
